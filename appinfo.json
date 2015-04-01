@@ -1,5 +1,9 @@
 {
-    "appKeys": {},
+    "appKeys": {
+        "K_ALBUM": 2,
+        "K_ARTIST": 1,
+        "K_TRACK": 3
+    },
     "capabilities": [
         ""
     ],
@@ -15,6 +19,6 @@
     "versionCode": 1,
     "versionLabel": "1.0",
     "watchapp": {
-        "watchface": false
+        "watchface": true
     }
 }
