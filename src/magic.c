@@ -4,109 +4,147 @@
 #define K_ALBUM  2
 #define K_TRACK  3
 
-static GFont s_font;
-static Window* sw_main;
+#define MAX_LABEL 128
 
-static char* s8_artist;
-static char* s8_album;
-static char* s8_track;
+typedef struct Layers {
+	TextLayer* header;
+	TextLayer* artist;
+	TextLayer* album;
+	TextLayer* track;
+} Layers;
 
-static TextLayer* st_artist;
-static TextLayer* st_album;
-static TextLayer* st_track;
+static Layers* get_layers (Layers* layers) {
+	static Layers* stored;
+	if (layers != NULL) stored = layers;
+	return stored;
+}
 
-//static AppSync sync;
-//static uint8_t* sync_buf;
-//static size_t sync_buf_size;
-
-static void init_text_layer(TextLayer* layer, char* str, int16_t margin) {
-	str = (char*) malloc(129);
-	snprintf(str, 128, "some name or whatever");
-	layer = text_layer_create(GRect(0, margin, 144, 56));
-	text_layer_set_text(layer, str);
-	text_layer_set_font(layer, s_font);
-	text_layer_set_text_alignment(layer, GTextAlignmentCenter);
-	layer_add_child(window_get_root_layer(sw_main), text_layer_get_layer(layer));
+static void on_tick(struct tm* tick, TimeUnits units) {
+	Layers* layers = get_layers(NULL);
+	clock_copy_time_string((char*) text_layer_get_text(layers->header), 8);
+	layer_mark_dirty((Layer*) layers->header);
 }
 
 static void on_tap(AccelAxisType axis, int32_t value) {
 	vibes_short_pulse();
-//	layer_mark_dirty((Layer*) st_artist);
-//	layer_mark_dirty((Layer*) st_album);
-//	layer_mark_dirty((Layer*) st_track);
 }
 
-static void on_load(Window* w) {
-	init_text_layer(st_artist, s8_artist, 0);
-	init_text_layer(st_album,  s8_album,  56);
-	init_text_layer(st_track,  s8_track,  112);
-	accel_tap_service_subscribe(on_tap);
+static TextLayer* init_text_layer(Window* w, char* str, int16_t margin, int16_t height, GFont font, GTextAlignment align, GColor back, GColor front) {
+	TextLayer* layer = text_layer_create(GRect(0, margin, 144, height));
+	text_layer_set_text(layer, str);
+	text_layer_set_font(layer, font);
+	text_layer_set_text_alignment(layer, align);
+	text_layer_set_background_color(layer, back);
+	text_layer_set_text_color(layer, front);
+	layer_add_child(window_get_root_layer(w), text_layer_get_layer(layer));
+	return layer;
 }
 
-static void on_unload(Window* w) {
-	accel_tap_service_unsubscribe();
-	text_layer_destroy(st_track);
-	text_layer_destroy(st_album);
-	text_layer_destroy(st_artist);
-	free(s8_track);
-	free(s8_album);
-	free(s8_artist);
-}
-
-
-/*
-static void on_change(const uint32_t key, const Tuple* new_tuple, const Tuple* old_tuple, void* context) {
-	
-}
-
-static void on_error(DictionaryResult dict_res, AppMessageResult app_res, void* context) {
-	static char* dcode = "123456789";
-	static char* acode = "123456789ab";
-	switch (dict_res) {
-		case DICT_OK:                     dcode = "no error "; break;
-		case DICT_NOT_ENOUGH_STORAGE:     dcode = "storage  "; break;
-		case DICT_INVALID_ARGS:           dcode = "args     "; break;
-		case DICT_INTERNAL_INCONSISTENCY: dcode = "inconsist"; break;
-		case DICT_MALLOC_FAILED:          dcode = "malloc   "; break;
-		else                              dcode = "unknown  ";
+static void app_error(AppMessageResult res, char* error) {
+	char* buf = "123456789012345";
+	switch (res) {
+		case APP_MSG_OK:                          buf = "no error"; break;
+		case APP_MSG_SEND_TIMEOUT:                buf = "timeout"; break;
+		case APP_MSG_SEND_REJECTED:               buf = "rejected"; break;
+		case APP_MSG_NOT_CONNECTED:               buf = "not connected"; break;
+		case APP_MSG_APP_NOT_RUNNING:             buf = "not running"; break;
+		case APP_MSG_INVALID_ARGS:                buf = "invalid args"; break;
+		case APP_MSG_BUSY:                        buf = "busy"; break;
+		case APP_MSG_BUFFER_OVERFLOW:             buf = "overflow"; break;
+		case APP_MSG_ALREADY_RELEASED:            buf = "released"; break;
+		case APP_MSG_CALLBACK_ALREADY_REGISTERED: buf = "registered"; break;
+		case APP_MSG_CALLBACK_NOT_REGISTERED:     buf = "not registered"; break;
+		case APP_MSG_OUT_OF_MEMORY:               buf = "out of memory"; break;
+		case APP_MSG_CLOSED:                      buf = "closed"; break;
+		case APP_MSG_INTERNAL_ERROR:              buf = "internal"; break;
+		default:                                  buf = "unknown";
 	}
-	switch (app_res) {
-		case APP_MSG_OK:                          acode = "no error   "; break;
-		case APP_MSG_SEND_TIMEOUT:                acode = "timeout    "; break;
-		case APP_MSG_SEND_REJECTED:               acode = "rejected   "; break;
-		case APP_MSG_NOT_CONNECTED:               acode = "!connected "; break;
-		case APP_MSG_APP_NOT_RUNNING:             acode = "!running   "; break;
-		case APP_MSG_INVALID_ARGS:                acode = "args       "; break;
-		case APP_MSG_BUSY:                        acode = "busy       "; break;
-		case APP_MSG_BUFFER_OVERFLOW:             acode = "buffer     "; break;
-		case APP_MSG_ALREADY_RELEASED:            acode = "released   "; break;
-		case APP_MSG_CALLBACK_ALREADY_REGISTERED: acode = "registered "; break;
-		case APP_MSG_CALLBACK_NOT_REGISTERED:     acode = "!registered"; break;
-		case APP_MSG_OUT_OF_MEMORY:               acode = "memory     "; break;
-		case APP_MSG_CLOSED:                      acode = "closed     "; break;
-		case APP_MSG_INTERNAL_ERROR:              acode = "internal   "; break;
-		else                                      acode = "unknown    ";
-	}
-		APP_LOG(APP_LOG_LEVEL_WARNING, "%9s %11s", dcode, acode);
+	snprintf(error, strlen(buf) + 1, "%s", buf);
 }
-*/
+
+static void on_receive_error(AppMessageResult res, void* context) {
+	char* error;
+	error = (char*) malloc(128);
+	app_error(res, error);
+	APP_LOG(APP_LOG_LEVEL_WARNING, "inbound error: %s", error);
+	free(error);
+}
+
+static void on_send_error(DictionaryIterator* iterator, AppMessageResult res, void* context) {
+	char* error;
+	error = (char*) malloc(128);
+	app_error(res, error);
+	APP_LOG(APP_LOG_LEVEL_WARNING, "outbound error: %s", error);
+	free(error);
+}
+
+static void on_send(DictionaryIterator* iterator, void* context) {
+	APP_LOG(APP_LOG_LEVEL_DEBUG, "Outbox send success!");
+}
+
+static void on_receive(DictionaryIterator* iterator, void* context) {
+//	char* ptr = NULL;
+	Layers* layers = (Layers*) context;
+	TextLayer* layer = NULL;
+	Tuple* tup = dict_read_first(iterator);
+	while(tup != NULL) {
+//		APP_LOG(APP_LOG_LEVEL_DEBUG, "%p:%p", label_buf(tup->key), label_layer(tup->key));
+//		APP_LOG(APP_LOG_LEVEL_DEBUG, "%p:%p", s8_track, st_track);
+		switch (tup->key) {
+			case K_ARTIST: layer = layers->artist; break;
+			case K_ALBUM:  layer = layers->album;  break;
+			case K_TRACK:  layer = layers->track;  break;
+			default: APP_LOG(APP_LOG_LEVEL_WARNING, "unknown key %lu", tup->key);
+		}
+//		APP_LOG(APP_LOG_LEVEL_DEBUG, "%p %p", layer, tup->value->cstring);
+//		APP_LOG(APP_LOG_LEVEL_DEBUG, "%lu", tup->key);
+//		APP_LOG(APP_LOG_LEVEL_DEBUG, "#%s#", tup->value->cstring);
+		if (layer != NULL) {
+			snprintf((char*) text_layer_get_text(layer), MAX_LABEL, "%s", tup->value->cstring);
+			layer_mark_dirty((Layer*) layer);
+		}
+		tup = dict_read_next(iterator);
+	}
+}
 
 int main() {
-	s_font = fonts_get_system_font(FONT_KEY_ROBOTO_CONDENSED_21);
-	sw_main = window_create();
-	window_set_window_handlers(sw_main, (WindowHandlers) { .load = on_load, .unload = on_unload });
-	window_stack_push(sw_main, true);
+	Window* win = window_create();
+	GFont font = fonts_get_system_font(FONT_KEY_ROBOTO_CONDENSED_21);
+	char buf_header[MAX_LABEL + 1] = "";
+	char buf_artist[MAX_LABEL + 1] = "";
+	char buf_album[MAX_LABEL + 1] = "";
+	char buf_track[MAX_LABEL + 1] = "";
+	Layers layers = {
+		.header = init_text_layer(win, buf_header,   0, 24, font, GTextAlignmentCenter, GColorBlack, GColorWhite),
+		.artist = init_text_layer(win, buf_artist,  24, 48, font, GTextAlignmentCenter, GColorWhite, GColorBlack),
+		.album  = init_text_layer(win, buf_album,   72, 48, font, GTextAlignmentCenter, GColorWhite, GColorBlack),
+		.track  = init_text_layer(win, buf_track,  120, 48, font, GTextAlignmentCenter, GColorWhite, GColorBlack),
+	};
+	get_layers(&layers);
 
-//	Tuplet init_dict[] = {
-//		TupletBytes(K_ARTIST, , ),
-//		TupletBytes(K_ALBUM, , ),
-//		TupletBytes(K_TRACK, , ),
-//	};
-//	
-//	app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum());
-//	app_sync_init(sync, sync_buf, sync_buf_size, init_dict, ARRAY_LENGTH(init_dict), on_change, on_error, NULL); //uint16_t
+	window_stack_push(win, true);
+
+	app_message_register_inbox_received(on_receive);
+	app_message_register_inbox_dropped(on_receive_error);
+	app_message_register_outbox_failed(on_send_error);
+	app_message_register_outbox_sent(on_send);
+	app_message_set_context(&layers);
+	app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum());
+
+	tick_timer_service_subscribe(MINUTE_UNIT, on_tick);
+	on_tick(NULL, MINUTE_UNIT);
+	accel_tap_service_subscribe(on_tap);
+
+//snprintf(buf_header, 11, "%p", layers.track);
+//layer_mark_dirty((Layer*) layers.header);
 
 	app_event_loop();
-
-	window_destroy(sw_main);
+	accel_tap_service_unsubscribe();
+	tick_timer_service_unsubscribe();
+	app_message_deregister_callbacks();
+	text_layer_destroy(layers.track);
+	text_layer_destroy(layers.album);
+	text_layer_destroy(layers.artist);
+	text_layer_destroy(layers.header);
+	window_destroy(win);
 }
