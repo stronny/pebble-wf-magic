@@ -2,13 +2,14 @@
     "appKeys": {
         "K_ALBUM": 2,
         "K_ARTIST": 1,
+        "K_PEBBLE": 0,
         "K_TRACK": 3
     },
     "capabilities": [
         ""
     ],
-    "companyName": "stronny@celestia.ru",
-    "longName": "magic",
+    "companyName": "stronny.red",
+    "longName": "Pebble magic watchface",
     "projectType": "native",
     "resources": {
         "media": []
