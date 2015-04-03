@@ -1,22 +1,18 @@
 #include <pebble.h>
-
-#define K_ARTIST 1
-#define K_ALBUM  2
-#define K_TRACK  3
-
-#define MAX_LABEL 128
-
-typedef struct Layers {
-	TextLayer* header;
-	TextLayer* artist;
-	TextLayer* album;
-	TextLayer* track;
-} Layers;
+#include "magic.h"
 
 static Layers* get_layers (Layers* layers) {
 	static Layers* stored;
-	if (layers != NULL) stored = layers;
+	if (layers) stored = layers;
 	return stored;
+}
+
+static void send_code(uint8_t code) {
+	DictionaryIterator* di = NULL;
+	app_message_outbox_begin(&di);
+	dict_write_uint8(di, K_PEBBLE, code);
+	dict_write_end(di);
+	app_message_outbox_send();
 }
 
 static void on_tick(struct tm* tick, TimeUnits units) {
@@ -27,6 +23,7 @@ static void on_tick(struct tm* tick, TimeUnits units) {
 
 static void on_tap(AccelAxisType axis, int32_t value) {
 	vibes_short_pulse();
+	send_code(C_TAP);
 }
 
 static TextLayer* init_text_layer(Window* w, char* str, int16_t margin, int16_t height, GFont font, GTextAlignment align, GColor back, GColor front) {
@@ -40,6 +37,7 @@ static TextLayer* init_text_layer(Window* w, char* str, int16_t margin, int16_t 
 	return layer;
 }
 
+/*
 static void app_error(AppMessageResult res, char* error) {
 	char* buf = "123456789012345";
 	switch (res) {
@@ -61,49 +59,24 @@ static void app_error(AppMessageResult res, char* error) {
 	}
 	snprintf(error, strlen(buf) + 1, "%s", buf);
 }
+*/
 
-static void on_receive_error(AppMessageResult res, void* context) {
-	char* error;
-	error = (char*) malloc(128);
-	app_error(res, error);
-	APP_LOG(APP_LOG_LEVEL_WARNING, "inbound error: %s", error);
-	free(error);
-}
-
-static void on_send_error(DictionaryIterator* iterator, AppMessageResult res, void* context) {
-	char* error;
-	error = (char*) malloc(128);
-	app_error(res, error);
-	APP_LOG(APP_LOG_LEVEL_WARNING, "outbound error: %s", error);
-	free(error);
-}
-
-static void on_send(DictionaryIterator* iterator, void* context) {
-	APP_LOG(APP_LOG_LEVEL_DEBUG, "Outbox send success!");
-}
-
-static void on_receive(DictionaryIterator* iterator, void* context) {
-//	char* ptr = NULL;
+static void on_receive(DictionaryIterator* di, void* context) {
 	Layers* layers = (Layers*) context;
 	TextLayer* layer = NULL;
-	Tuple* tup = dict_read_first(iterator);
-	while(tup != NULL) {
-//		APP_LOG(APP_LOG_LEVEL_DEBUG, "%p:%p", label_buf(tup->key), label_layer(tup->key));
-//		APP_LOG(APP_LOG_LEVEL_DEBUG, "%p:%p", s8_track, st_track);
+	Tuple* tup = dict_read_first(di);
+	while(tup) {
 		switch (tup->key) {
 			case K_ARTIST: layer = layers->artist; break;
 			case K_ALBUM:  layer = layers->album;  break;
 			case K_TRACK:  layer = layers->track;  break;
 			default: APP_LOG(APP_LOG_LEVEL_WARNING, "unknown key %lu", tup->key);
 		}
-//		APP_LOG(APP_LOG_LEVEL_DEBUG, "%p %p", layer, tup->value->cstring);
-//		APP_LOG(APP_LOG_LEVEL_DEBUG, "%lu", tup->key);
-//		APP_LOG(APP_LOG_LEVEL_DEBUG, "#%s#", tup->value->cstring);
-		if (layer != NULL) {
+		if (layer) {
 			snprintf((char*) text_layer_get_text(layer), MAX_LABEL, "%s", tup->value->cstring);
 			layer_mark_dirty((Layer*) layer);
 		}
-		tup = dict_read_next(iterator);
+		tup = dict_read_next(di);
 	}
 }
 
@@ -125,9 +98,6 @@ int main() {
 	window_stack_push(win, true);
 
 	app_message_register_inbox_received(on_receive);
-	app_message_register_inbox_dropped(on_receive_error);
-	app_message_register_outbox_failed(on_send_error);
-	app_message_register_outbox_sent(on_send);
 	app_message_set_context(&layers);
 	app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum());
 
@@ -138,7 +108,9 @@ int main() {
 //snprintf(buf_header, 11, "%p", layers.track);
 //layer_mark_dirty((Layer*) layers.header);
 
+	send_code(C_OPEN);
 	app_event_loop();
+	send_code(C_STOP);
 	accel_tap_service_unsubscribe();
 	tick_timer_service_unsubscribe();
 	app_message_deregister_callbacks();
